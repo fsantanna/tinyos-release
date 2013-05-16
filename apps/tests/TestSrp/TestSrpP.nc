@@ -59,10 +59,10 @@ implementation {
   test_route_t routes[6] = {
     {0, {}},
     {3, {1,2,3}},
-    {2, {2,3}},
+    {0, {2,3}},
     {0, {}},
-    {3, {4,2,3}},
-    {3, {5,2,3}},
+    {0, {4,2,3}},
+    {0, {5,2,3}},
   };
   
 
@@ -81,7 +81,8 @@ implementation {
 
     myCount++;
     payload = ((test_payload_t*) call SourceRouteSend.getPayload(&myMsg, sizeof(test_payload_t)));
-    payload -> count = myCount;
+    //payload -> count = myCount;
+    payload -> count = TOS_NODE_ID*100 + myCount;
 
     //NOTE we don't want space allocated for the route outside of the header, so this is kind of awkward.
     //NOTE it seems bad that the sender needs to specify themselves, and also that the user needs to remember that a 1-hop path has 2 nodes in it.
