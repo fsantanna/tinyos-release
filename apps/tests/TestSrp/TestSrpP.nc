@@ -56,15 +56,30 @@ implementation {
     am_addr_t route[SRP_MAX_PATHLEN];
   } test_route_t;
 
-  test_route_t routes[6] = {
+  test_route_t routes[15] = {
     {0, {}},
     {3, {1,2,3}},
-    {0, {2,3}},
+    {2, {2,3}},
     {0, {}},
-    {0, {4,2,3}},
-    {0, {5,2,3}},
+    {3, {4,2,3}},
+    {3, {5,2,3}},
+    {3, {6,2,3}},
+    {3, {7,2,3}},
+    {3, {8,2,3}},
+    {3, {9,2,3}},
+    {3, {10,2,3}},
+    {3, {11,2,3}},
+    {3, {12,2,3}},
+    {3, {13,2,3}},
+    {3, {14,2,3}},
   };
-  
+/*
+          3
+          |
+          2
+        / | \
+       1  4  5 ... 14
+*/
 
   typedef nx_struct {
     nx_uint8_t count;
@@ -86,7 +101,8 @@ implementation {
 
     //NOTE we don't want space allocated for the route outside of the header, so this is kind of awkward.
     //NOTE it seems bad that the sender needs to specify themselves, and also that the user needs to remember that a 1-hop path has 2 nodes in it.
-    err = call SourceRouteSend.send(routes[TOS_NODE_ID].route, routes[TOS_NODE_ID].len , &myMsg, sizeof(test_payload_t));
+    err = call SourceRouteSend.send(routes[TOS_NODE_ID].route, routes[TOS_NODE_ID].len,
+                &myMsg, sizeof(test_payload_t));
 
     dbg("TestSrpP", "Sending %d : %d\n",myCount, err);
   }
@@ -98,11 +114,13 @@ implementation {
     }
   }
 
+  int V = 0;
   event message_t* Receive.receive(message_t* msg, void* payload, uint8_t len) {
     test_payload_t* tPayload;
     //dbg("TestSrpP", "Receive msg %p payload %p\n", msg, payload);
     tPayload = (test_payload_t*) payload;
     dbg("TestSrpP","Receive p->count %d from %d \n", tPayload->count, (call SourceRoutePacket.getRoute(msg))[0]);
+    V = tPayload->count;
     return msg;
   }
 

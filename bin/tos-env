@@ -1,0 +1,9 @@
+#!/bin/bash
+echo "Setting TinyOs 2 enviroment variables!"
+export TOSROOT=/opt/tinyos-release
+export PATH=$TOSROOT/bin:$PATH
+export TOSDIR=$TOSROOT/tos
+export MAKERULES=$TOSROOT/support/make/Makerules
+export CLASSPATH=$TOSROOT/support/sdk/java/tinyos.jar:.
+export PYTHONPATH=.:$TOSROOT/support/sdk/python:$PYTHONPATH
+export PATH=$TOSROOT/support/sdk/c:$PATH

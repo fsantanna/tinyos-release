@@ -85,6 +85,9 @@ implementation {
   srf_queue_entry_t clientEntries[CLIENT_COUNT];
   //client statuses
   uint8_t clientStatus[CLIENT_COUNT];  
+
+  int LOST = 0;
+  int OK   = 0;
   
   sr_header_t* getSRPHeader(message_t* msg);
 
@@ -276,8 +279,10 @@ implementation {
          qe -> msg = msg;
          call SendQueue.enqueue(qe);
          post sendTask();
+         OK++;
          return call MessagePool.get();
        } else {
+         LOST++;
          dbg("SRPError", "ERROR queue full or message pool empty or queue entry pool empty\n");
          return msg;
        }

@@ -36,6 +36,8 @@
 
 #include "SourceRouteEngine.h"
 
+//#define CEU_ON
+
 generic configuration SourceRouteEngineC(am_id_t AMId) {
   provides {
     interface StdControl;
@@ -50,8 +52,10 @@ generic configuration SourceRouteEngineC(am_id_t AMId) {
 implementation {
   enum {
     CLIENT_COUNT = uniqueCount(UQ_SRP_CLIENT),
-    FORWARD_COUNT = 12,
+    FORWARD_COUNT = 1,
+#ifndef CEU_ON
     QUEUE_SIZE = CLIENT_COUNT + FORWARD_COUNT,
+#endif
   };
   components MainC;
 
@@ -61,16 +65,20 @@ implementation {
 
   components SourceRouteEngineP as Engine;
   
+#ifndef CEU_ON
   components new QueueC(srf_queue_entry_t*, QUEUE_SIZE) as SendQueue;
   components new PoolC(srf_queue_entry_t, FORWARD_COUNT) as QEntryPool;
   components new PoolC(message_t, FORWARD_COUNT) as MessagePool;
+#endif
 
   Engine.SubReceive -> SubReceive;
   Engine.SubSend -> SubSend;
   Engine.SubControl -> ActiveMessageC;
+#ifndef CEU_ON
   Engine.SendQueue -> SendQueue;
   Engine.QEntryPool -> QEntryPool;
   Engine.MessagePool -> MessagePool;
+#endif
   MainC.SoftwareInit -> Engine.Init;
 
   StdControl = Engine;

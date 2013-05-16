@@ -1,5 +1,6 @@
 #include "SourceRouteEngine.h"
-#include <Timer.h>
+
+//#include <Timer.h>
 
 module SourceRouteEngineP {
   provides {
@@ -10,7 +11,7 @@ module SourceRouteEngineP {
     interface Init;
   }
   uses {
-    interface Timer<TMilli>;
+    //interface Timer<TMilli>;
     interface SourceRouteId[uint8_t client];
     interface AMSend as SubSend;
     interface Receive as SubReceive;
@@ -63,6 +64,8 @@ implementation
         signal SourceRouteSend.sendDone[a](b,c)
     #define SubSend_send(a,b,c) \
         call SubSend.send(a,b,c)
+
+/*
     #define Leds_led0Toggle() \
         call Leds.led0Toggle()
     #define Leds_led1Toggle() \
@@ -71,16 +74,21 @@ implementation
         call Leds.led2Toggle()
     #define Leds_set(v) \
         call Leds.set(v)
+*/
 
+/*
     #define ceu_out_wclock(us) \
         call Timer.startOneShot(us/1000)
+*/
 
     #include "_ceu_defs.h"
     #include "_ceu_code.cceu"
 
+/*
     event void Timer.fired() {
         ceu_go_wclock(call Timer.getdt()*1000);
     }
+*/
 
     command error_t Init.init () {
         ceu_go_init();
@@ -88,19 +96,19 @@ implementation
     }
 
     command error_t StdControl.start () {
-        ceu_go_event(IN_SRP_START, NULL);
+        ceu_go_event(CEU_IN_SRP_START, NULL);
         return SUCCESS;
     }
     event void SubControl.startDone (error_t error) {
-        ceu_go_event(IN_SRP_START, NULL);
+        ceu_go_event(CEU_IN_SRP_START, NULL);
     }
 
     command error_t StdControl.stop () {
-        ceu_go_event(IN_SRP_STOP, NULL);
+        ceu_go_event(CEU_IN_SRP_STOP, NULL);
         return SUCCESS;
     }
     event void SubControl.stopDone (error_t error) {
-        ceu_go_event(IN_SRP_STOP, NULL);
+        ceu_go_event(CEU_IN_SRP_STOP, NULL);
     }
 
     command error_t SourceRouteSend.send [uint8_t client]
@@ -108,23 +116,20 @@ implementation
                                           message_t* msg, uint8_t len)
     {
         srp_send_t t = { msg, path, client, pathLen, len };
-        ceu_go_event(IN_SRP_SEND, &t);
+        ceu_go_event(CEU_IN_SRP_SEND, &t);
         return SUCCESS;
     }
 
     event void SubSend.sendDone (message_t* msg, error_t err) {
         srp_senddone_t t = { msg, err };
-        ceu_go_event(IN_SRP_SENDDONE, &t);
+        ceu_go_event(CEU_IN_SRP_SENDDONE, &t);
     }
 
     event message_t* SubReceive.receive (message_t* msg,
                                          void* payload, uint8_t len)
     {
         srp_receive_t t = { &msg, len };
-        ceu_go_event(IN_SRP_RECEIVE, &t);
-//call Leds.led0Toggle();
-//call Leds.led1Toggle();
-//call Leds.led2Toggle();
+        ceu_go_event(CEU_IN_SRP_RECEIVE, &t);
         return *t.msg_ptr;
     }
 
