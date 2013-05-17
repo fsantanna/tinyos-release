@@ -1,4 +1,4 @@
-@define(FORWARD_COUNT,    1)
+@define(FORWARD_COUNT,    64)
 @define(CLIENT_COUNT,     1)
 @define(SRP_MAX_PATHLEN, 10)
 
@@ -13,13 +13,15 @@ native pure
     _SourceRouteSend_getPayload();
 
 native nohold
+    _dbg(),
+    _memcpy(),
     _Receive_receive(),          // client is supposed not to hold
     _SourceRouteSend_cancel(),
     _SubSend_cancel(),
+    _SourceRouteSend_sendDone(),
     _SourceRoutePacket_setRoute();
 
 native
-    _SourceRouteSend_sendDone(),
     _SubSend_send();
 
 input void              SRP_START;
@@ -45,35 +47,33 @@ do
         _SourceRoutePacket_setRoute(snd:msg, nxPath, snd:pathLen);
 
         var _sr_header_t* hdr = _getSRPHeader(snd:msg);
-        hdr:payload_id = 1;
         hdr:payload_id = _SourceRouteId_fetch(this.id);
         hdr:seqno      = seqno;
         hdr:hops_left  = snd:pathLen - 2;
 
         seqno = seqno + 1;
 
-        var _srp_senddone_t* done;
-
+        var _message_t* snd_msg = snd:msg;
+        var int         snd_len = snd:len;
         loop do
-            var _message_t* snd_msg = snd:msg;
-            var u16 dst = _SourceRoutePacket_getNextHop(snd:msg);
-            _SubSend_send(dst, snd:msg, snd:len + sizeof<_sr_header_t>)
+            var u16 dst = _SourceRoutePacket_getNextHop(snd_msg);
+            _SubSend_send(dst, snd_msg, snd_len + sizeof<_sr_header_t>)
                 finalize with
-                    do end; //_SubSend_cancel(snd:msg);
+                    do end; //_SubSend_cancel(snd_msg);
                 end;
 
-            // TODO
-            done = await SRP_SENDDONE;
+            var _srp_senddone_t* done = await SRP_SENDDONE;
             if done:msg == snd_msg then
+                _SourceRouteSend_sendDone(this.id, done:msg, done:error);
                 break;
             end
         end
-
-        _SourceRouteSend_sendDone(this.id, done:msg, done:error)
-            finalize with
-                do end; //_SourceRouteSend_cancel(done:msg);
-            end;
     end
+end
+
+native _USE;
+native do
+    int USE = 0;
 end
 
 class Forwarder(FORWARD_COUNT) with
@@ -81,6 +81,7 @@ class Forwarder(FORWARD_COUNT) with
     var   u8           len;
 do
     var _message_t buf;
+_USE = _USE + 1;
 
     // switch buffers
     var _message_t* my = *msg_ptr;
@@ -104,9 +105,8 @@ do
             await SRP_SENDDONE
                 until done:msg == &buf; // my peer has been fwded
     end
+_USE = _USE - 1;
 end
-
-var _message_t* msg_first = null;   // holds OS buffer
 
 loop do
     await SRP_START;
@@ -114,30 +114,24 @@ loop do
     par/or do
         await SRP_STOP;
     with
+        // TODO: spawn
         var Client[CLIENT_COUNT]  clients;
 
         loop i, CLIENT_COUNT do
             clients[i].id = i;
         end
 
-        do  // scope of spawns
-            loop do
-                var _srp_receive_t* recv = await SRP_RECEIVE;
-                if msg_first == null then
-                    finalize
-                        msg_first = *(recv:msg_ptr);    // first RECEIVE
-                    with
-                        nothing;    // received buffer is global (OS)
-                    end
-                end
-
+        // scope of spawns
+        do
+            var _srp_receive_t* recv;
+            every recv=SRP_RECEIVE do
                 var _sr_header_t* hdr = _getSRPHeader(*(recv:msg_ptr));
 
                 if hdr:hops_left == 0 then
+                    var int len = recv:len - sizeof<_sr_header_t>;
                     _Receive_receive(hdr:payload_id, *(recv:msg_ptr),
-                                      _SourceRouteSend_getPayload(0, *(recv:msg_ptr),
-                                            recv:len - sizeof<_sr_header_t>),
-                                      recv:len - sizeof<_sr_header_t>);
+                          _SourceRouteSend_getPayload(0, *(recv:msg_ptr), len),
+                          len);
                 else
                     hdr:hops_left = hdr:hops_left - 1;
                     var int ok = spawn Forwarder with
@@ -150,7 +144,6 @@ loop do
                         this.len = recv:len;
                     end;
                     if not ok then
-                        *(recv:msg_ptr) = msg_first;    // reuse OS buffer
 native _LOST, _OK;
 native do
     int LOST = 0;

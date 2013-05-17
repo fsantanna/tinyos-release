@@ -1,0 +1,137 @@
+@define(FORWARD_COUNT,   90)
+@define(CLIENT_COUNT,     1)
+@define(SRP_MAX_PATHLEN, 10)
+
+native  // types
+    _message_t,  _nx_am_addr_t,   _sr_header_t,
+    _srp_send_t, _srp_senddone_t, _srp_receive_t;
+
+native pure
+    _getSRPHeader(),
+    _SourceRouteId_fetch(),
+    _SourceRoutePacket_getNextHop(),
+    _SourceRouteSend_getPayload();
+
+native nohold
+    _dbg(),
+    _memcpy(),
+    _Receive_receive(),          // client is supposed not to hold
+    _SourceRouteSend_cancel(),
+    _SubSend_cancel(),
+    _SourceRouteSend_sendDone(),
+    _SourceRoutePacket_setRoute();
+
+native
+    _SubSend_send();
+
+input void              SRP_START;
+input void              SRP_STOP;
+input _srp_send_t*      SRP_SEND;
+input _srp_senddone_t*  SRP_SENDDONE;
+input _srp_receive_t*   SRP_RECEIVE;
+
+class Client with
+    var u8 id;
+do
+    var u8 seqno = 0;
+
+    loop do
+        var _srp_send_t* snd =
+            await SRP_SEND
+                until snd:client == this.id;
+
+        var _nx_am_addr_t[SRP_MAX_PATHLEN] nxPath;
+        loop i, snd:pathLen do
+            nxPath[i] = snd:path[i];
+        end
+        _SourceRoutePacket_setRoute(snd:msg, nxPath, snd:pathLen);
+
+        var _sr_header_t* hdr = _getSRPHeader(snd:msg);
+        hdr:payload_id = _SourceRouteId_fetch(this.id);
+        hdr:seqno      = seqno;
+        hdr:hops_left  = snd:pathLen - 2;
+
+        seqno = seqno + 1;
+
+        var _message_t* snd_msg = snd:msg;
+        var int         snd_len = snd:len;
+        loop do
+            var u16 dst = _SourceRoutePacket_getNextHop(snd_msg);
+            _SubSend_send(dst, snd_msg, snd_len + sizeof<_sr_header_t>)
+                finalize with
+                    do end; //_SubSend_cancel(snd_msg);
+                end;
+
+            var _srp_senddone_t* done = await SRP_SENDDONE;
+            if done:msg == snd_msg then
+                _SourceRouteSend_sendDone(this.id, done:msg, done:error);
+                break;
+            end
+        end
+    end
+end
+
+class Forwarder(FORWARD_COUNT) with
+    var   _message_t buf;
+    var   u8         len;
+do
+    loop do
+        _SubSend_send(_SourceRoutePacket_getNextHop(&buf),
+                      &buf, this.len)
+            finalize with
+                nothing; //_SubSend_cancel(&buf);
+            end;
+
+        var _srp_senddone_t* done = await SRP_SENDDONE;
+        if done:msg == &buf then
+            break;                  // &buf msg has been fwded
+        end
+    end
+end
+
+loop do
+    await SRP_START;
+
+    par/or do
+        await SRP_STOP;
+    with
+        // TODO: spawn
+        var Client[CLIENT_COUNT]  clients;
+
+        loop i, CLIENT_COUNT do
+            clients[i].id = i;
+        end
+
+        // scope of spawns
+        do
+            var _srp_receive_t* recv;
+            every recv=SRP_RECEIVE do
+                var _sr_header_t* hdr = _getSRPHeader(*(recv:msg_ptr));
+
+                if hdr:hops_left == 0 then
+                    var int len = recv:len - sizeof<_sr_header_t>;
+                    _Receive_receive(hdr:payload_id, *(recv:msg_ptr),
+                          _SourceRouteSend_getPayload(0, *(recv:msg_ptr), len),
+                          len);
+                else
+                    hdr:hops_left = hdr:hops_left - 1;
+                    var int ok = spawn Forwarder with
+                        // TODO: sizeof<_message_t>
+                        _memcpy(&this.buf, *(recv:msg_ptr), sizeof<_message_t>);
+                        this.len = recv:len;
+                    end;
+native _OK, _LOST;
+native do
+    int OK   = 0;
+    int LOST = 0;
+end
+                    if not ok then
+                        _LOST = _LOST + 1;
+                    else
+                        _OK   = _OK + 1;
+                    end
+                end
+            end
+        end
+    end
+end

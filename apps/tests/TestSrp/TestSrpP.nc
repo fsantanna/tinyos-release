@@ -47,7 +47,7 @@ module TestSrpP {
 } 
 implementation {
   message_t myMsg;
-  uint8_t myCount = 0;
+  uint16_t myCount = 0;
   #define SEND_INTERVAL 50
   #define SEND_COUNT 200
 
@@ -82,7 +82,7 @@ implementation {
 */
 
   typedef nx_struct {
-    nx_uint8_t count;
+    nx_uint16_t count;
   } test_payload_t;
 
   event void Boot.booted() {
@@ -95,20 +95,18 @@ implementation {
     error_t err;
 
     myCount++;
-    payload = ((test_payload_t*) call SourceRouteSend.getPayload(&myMsg, sizeof(test_payload_t)));
-    //payload -> count = myCount;
-    payload -> count = TOS_NODE_ID*100 + myCount;
+    payload = ((test_payload_t*) call SourceRouteSend.getPayload(&myMsg,
+                                    sizeof(test_payload_t)));
+    payload->count = TOS_NODE_ID*1000 + myCount;
 
-    //NOTE we don't want space allocated for the route outside of the header, so this is kind of awkward.
-    //NOTE it seems bad that the sender needs to specify themselves, and also that the user needs to remember that a 1-hop path has 2 nodes in it.
-    err = call SourceRouteSend.send(routes[TOS_NODE_ID].route, routes[TOS_NODE_ID].len,
+    err = call SourceRouteSend.send(routes[TOS_NODE_ID].route, 
+                routes[TOS_NODE_ID].len,
                 &myMsg, sizeof(test_payload_t));
 
-    dbg("TestSrpP", "Sending %d : %d\n",myCount, err);
+    dbg("TestSrpP", "Sending %d : %d\n",payload->count, err);
   }
 
   event void SourceRouteSend.sendDone(message_t* msg, error_t error) {
-    //dbg("TestSrpP", "SendDone: %d\n", error);
     if (myCount < SEND_COUNT) {
       call Timer.startOneShot(call Random.rand16() % SEND_INTERVAL);
     }
@@ -117,16 +115,14 @@ implementation {
   int V = 0;
   event message_t* Receive.receive(message_t* msg, void* payload, uint8_t len) {
     test_payload_t* tPayload;
-    //dbg("TestSrpP", "Receive msg %p payload %p\n", msg, payload);
     tPayload = (test_payload_t*) payload;
-    dbg("TestSrpP","Receive p->count %d from %d \n", tPayload->count, (call SourceRoutePacket.getRoute(msg))[0]);
+    dbg("TestSrpP","Receive %d from %d \n", tPayload->count,
+                    (call SourceRoutePacket.getRoute(msg))[0]);
     V = tPayload->count;
     return msg;
   }
 
   event void RadioSplitControl.startDone(error_t error) {
-    dbg("TestSrpP", "Radio startDone %d\n", error);
-
     if (routes[TOS_NODE_ID].len > 0 ) {
       call Timer.startOneShot(call Random.rand16() % SEND_INTERVAL);
     }

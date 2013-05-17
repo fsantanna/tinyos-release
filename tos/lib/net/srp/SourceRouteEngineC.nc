@@ -36,7 +36,7 @@
 
 #include "SourceRouteEngine.h"
 
-//#define CEU_ON
+#define CEU_ON
 
 generic configuration SourceRouteEngineC(am_id_t AMId) {
   provides {
@@ -52,12 +52,21 @@ generic configuration SourceRouteEngineC(am_id_t AMId) {
 implementation {
   enum {
     CLIENT_COUNT = uniqueCount(UQ_SRP_CLIENT),
-    FORWARD_COUNT = 1,
+    FORWARD_COUNT = 128,
 #ifndef CEU_ON
     QUEUE_SIZE = CLIENT_COUNT + FORWARD_COUNT,
 #endif
   };
   components MainC;
+
+/*
+#ifdef CEU_ON
+  components LedsC;
+  Engine.Leds -> LedsC;
+  components new TimerMilliC();
+  Engine.Timer -> TimerMilliC;
+#endif
+*/
 
   components new AMSenderC(AMId) as SubSend;
   components new AMReceiverC(AMId) as SubReceive;

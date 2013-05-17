@@ -1,6 +1,8 @@
 #include "SourceRouteEngine.h"
 
-//#include <Timer.h>
+/*
+#include <Timer.h>
+*/
 
 module SourceRouteEngineP {
   provides {
@@ -11,7 +13,9 @@ module SourceRouteEngineP {
     interface Init;
   }
   uses {
-    //interface Timer<TMilli>;
+/*
+    interface Timer<TMilli>;
+*/
     interface SourceRouteId[uint8_t client];
     interface AMSend as SubSend;
     interface Receive as SubReceive;
@@ -52,6 +56,8 @@ implementation
     sr_header_t* getSRPHeader(message_t* msg);
     #define SourceRouteId_fetch(a) \
         call SourceRouteId.fetch[a]()
+    #define SourceRoutePacket_getRoute(a) \
+        call SourceRoutePacket.getRoute(a)
     #define SourceRoutePacket_getNextHop(a) \
         call SourceRoutePacket.getNextHop(a)
     #define SourceRouteSend_getPayload(a,b,c) \
